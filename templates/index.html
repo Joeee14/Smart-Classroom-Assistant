@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Smart Classroom — Home{% endblock %}
+{% block content %}
+
+<!-- HERO -->
+<section class="hero">
+  <canvas id="particles"></canvas>
+  <div class="hero-content fade-in">
+    <div class="hero-badge">AI-Powered · Computer Vision · NLP</div>
+    <h1 class="hero-title">
+      Smart <span class="gradient-text">Classroom</span><br>Assistant
+    </h1>
+    <p class="hero-sub">Face recognition attendance &amp; intelligent Q&amp;A classification powered by deep learning.</p>
+    <div class="hero-actions">
+      <a href="/attendance" class="btn btn-blue btn-lg pulse-glow">
+        📷 Take Attendance
+      </a>
+      <a href="/question" class="btn btn-red btn-lg">
+        🎤 Ask a Question
+      </a>
+    </div>
+  </div>
+  <div class="hero-scroll-hint">↓ scroll</div>
+</section>
+
+<!-- STATS -->
+<section class="section">
+  <div class="container">
+    <div class="stats-row" id="statsRow">
+      <div class="stat-card glass fade-in-up">
+        <div class="stat-icon blue">👥</div>
+        <div class="stat-value counter" data-target="0" id="statStudents">0</div>
+        <div class="stat-label">Registered Students</div>
+      </div>
+      <div class="stat-card glass fade-in-up" style="animation-delay:.1s">
+        <div class="stat-icon blue">✅</div>
+        <div class="stat-value counter" data-target="0" id="statToday">0</div>
+        <div class="stat-label">Present Today</div>
+      </div>
+      <div class="stat-card glass fade-in-up" style="animation-delay:.2s">
+        <div class="stat-icon red">❓</div>
+        <div class="stat-value counter" data-target="0" id="statQ">0</div>
+        <div class="stat-label">Questions Logged</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURE CARDS -->
+<section class="section">
+  <div class="container">
+    <h2 class="section-title">What would you like to do?</h2>
+    <div class="feature-grid">
+
+      <a href="/attendance" class="feature-card glass hover-lift fade-in-up">
+        <div class="feature-icon blue-glow">📷</div>
+        <h3>Take Attendance</h3>
+        <p>Open the camera and automatically recognise known students. New faces are registered on the spot with their ID.</p>
+        <div class="feature-tag blue-tag">Face Recognition</div>
+        <div class="feature-arrow">→</div>
+      </a>
+
+      <a href="/question" class="feature-card glass hover-lift fade-in-up" style="animation-delay:.15s">
+        <div class="feature-icon red-glow">🎤</div>
+        <h3>Ask a Question</h3>
+        <p>Speak your question aloud. The system transcribes it, classifies the subject, and logs it to the student's profile.</p>
+        <div class="feature-tag red-tag">Speech + NLP</div>
+        <div class="feature-arrow">→</div>
+      </a>
+
+      <a href="/dashboard" class="feature-card glass hover-lift fade-in-up" style="animation-delay:.3s">
+        <div class="feature-icon purple-glow">📊</div>
+        <h3>View Dashboard</h3>
+        <p>Review full attendance history, question logs, subject breakdowns, and per-student analytics.</p>
+        <div class="feature-tag purple-tag">Analytics</div>
+        <div class="feature-arrow">→</div>
+      </a>
+
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="section section-alt">
+  <div class="container">
+    <h2 class="section-title">How It Works</h2>
+    <div class="steps">
+      <div class="step fade-in-up">
+        <div class="step-num blue">01</div>
+        <h4>Camera Scan</h4>
+        <p>DeepFace analyses the webcam feed and matches faces against the known_faces database.</p>
+      </div>
+      <div class="step-arrow">→</div>
+      <div class="step fade-in-up" style="animation-delay:.1s">
+        <div class="step-num red">02</div>
+        <h4>Register / Recognise</h4>
+        <p>Known students are instantly marked Present. New faces are registered with ID &amp; name.</p>
+      </div>
+      <div class="step-arrow">→</div>
+      <div class="step fade-in-up" style="animation-delay:.2s">
+        <div class="step-num blue">03</div>
+        <h4>Speech Q&amp;A</h4>
+        <p>Questions are captured via microphone, transcribed by Google, and classified by the NLP model.</p>
+      </div>
+      <div class="step-arrow">→</div>
+      <div class="step fade-in-up" style="animation-delay:.3s">
+        <div class="step-num red">04</div>
+        <h4>Logged to CSV</h4>
+        <p>All data is persisted in attendance.csv and student_questions.csv for full traceability.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+fetch('/api/stats').then(r=>r.json()).then(d=>{
+  animateCounter('statStudents', d.total_students);
+  animateCounter('statToday',    d.today_attendance);
+  animateCounter('statQ',        d.total_questions);
+});
+</script>
+{% endblock %}

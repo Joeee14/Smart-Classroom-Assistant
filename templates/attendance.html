@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+{% block title %}Attendance — Smart Classroom{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="container">
+    <h1 class="page-title">📷 <span class="gradient-text">Attendance</span></h1>
+    <p class="page-sub">Scan students with the webcam. Known faces are marked instantly; new faces are registered on the spot.</p>
+  </div>
+</div>
+
+<div class="container page-body">
+  <div class="two-col">
+
+    <!-- LEFT: Scanner Panel -->
+    <div class="panel glass fade-in-up">
+      <div class="panel-header">
+        <h3>Camera Scanner</h3>
+        <span class="badge" id="scanBadge">Idle</span>
+      </div>
+
+      <!-- Status display -->
+      <div class="scan-visual" id="scanVisual">
+        <div class="scan-ring" id="scanRing">
+          <span class="scan-icon">📷</span>
+        </div>
+        <p id="scanStatus" class="scan-status">Ready to scan</p>
+        <div class="scan-timer hidden" id="scanTimer">
+          <div class="timer-bar"><div class="timer-fill" id="timerFill"></div></div>
+          <span id="timerLabel">15s</span>
+        </div>
+      </div>
+
+      <button class="btn btn-blue btn-full" id="startScanBtn">
+        Start Camera Scan (15s)
+      </button>
+
+      <!-- Recognised students result -->
+      <div class="result-box hidden" id="recognisedBox">
+        <h4>✅ Recognised Students</h4>
+        <ul id="recognisedList" class="student-list"></ul>
+        <button class="btn btn-blue btn-full mt" id="saveAttBtn">Save Attendance</button>
+      </div>
+
+      <!-- Unknown face registration -->
+      <div class="result-box red-box hidden" id="unknownBox">
+        <h4>❓ Unknown Face Detected</h4>
+        <img id="unknownImg" class="face-thumb" alt="Unknown face"/>
+        <div class="form-row">
+          <input id="newSid"  class="input" placeholder="Student ID  (e.g. 22100512)" />
+          <input id="newName" class="input" placeholder="Full Name   (e.g. Ahmed)" />
+        </div>
+        <button class="btn btn-red btn-full mt" id="registerBtn">Register &amp; Save</button>
+      </div>
+    </div>
+
+    <!-- RIGHT: Today's attendance -->
+    <div class="panel glass fade-in-up" style="animation-delay:.1s">
+      <div class="panel-header">
+        <h3>Today's Attendance</h3>
+        <button class="btn-sm btn-ghost" onclick="loadTodayAtt()">↻ Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" id="todayTable">
+          <thead><tr><th>ID</th><th>Name</th><th>Mood</th><th>Time</th></tr></thead>
+          <tbody id="todayBody"><tr><td colspan="4" class="empty">No records yet</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Full history -->
+  <div class="panel glass fade-in-up mt" style="animation-delay:.2s">
+    <div class="panel-header">
+      <h3>Full Attendance History</h3>
+      <input class="input-sm" id="attSearch" placeholder="🔍 Search student..." oninput="filterTable()"/>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table" id="histTable">
+        <thead><tr><th>Date</th><th>ID</th><th>Name</th><th>Mood</th><th>Status</th></tr></thead>
+        <tbody id="histBody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ─── Attendance Page Logic ─────────────────────────────── */
+let taskId = null, pollInt = null, unknownB64 = null, unknownMood = "neutral";
+const today = new Date().toISOString().slice(0,10);
+
+// ── Load tables on page load ────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  loadTodayAtt();
+  loadHistory();
+});
+
+// ── Today's attendance ──────────────────────────────────────
+function loadTodayAtt() {
+  fetch('/api/attendance-history').then(r=>r.json()).then(rows=>{
+    const todayRows = rows.filter(r=>r.date===today);
+    const tb = document.getElementById('todayBody');
+    if (!todayRows.length) { tb.innerHTML='<tr><td colspan="4" class="empty">No records yet</td></tr>'; return; }
+    tb.innerHTML = todayRows.map(r=>`
+      <tr>
+        <td><code>${r.student_id}</code></td>
+        <td>${r.name}</td>
+        <td><span class="mood-badge">${r.mood}</span></td>
+        <td>${r.session_timestamp ? r.session_timestamp.slice(11,19) : ''}</td>
+      </tr>`).join('');
+  });
+}
+
+// ── Full history ─────────────────────────────────────────────
+let allHistRows = [];
+function loadHistory() {
+  fetch('/api/attendance-history').then(r=>r.json()).then(rows=>{
+    allHistRows = rows;
+    renderHistory(rows);
+  });
+}
+function renderHistory(rows) {
+  const tb = document.getElementById('histBody');
+  if (!rows.length) { tb.innerHTML='<tr><td colspan="5" class="empty">No records</td></tr>'; return; }
+  tb.innerHTML = rows.map(r=>`
+    <tr>
+      <td>${r.date||''}</td>
+      <td><code>${r.student_id||''}</code></td>
+      <td>${r.name||''}</td>
+      <td><span class="mood-badge">${r.mood||''}</span></td>
+      <td><span class="status-badge green">✓ ${r.status||'Present'}</span></td>
+    </tr>`).join('');
+}
+function filterTable() {
+  const q = document.getElementById('attSearch').value.toLowerCase();
+  renderHistory(allHistRows.filter(r=>
+    (r.name||'').toLowerCase().includes(q) ||
+    (r.student_id||'').toLowerCase().includes(q)
+  ));
+}
+
+// ── Start scan ──────────────────────────────────────────────
+document.getElementById('startScanBtn').addEventListener('click', async () => {
+  setBadge('Scanning…','blue');
+  setStatus('📡 Opening camera…', true);
+  startTimer(15);
+  document.getElementById('recognisedBox').classList.add('hidden');
+  document.getElementById('unknownBox').classList.add('hidden');
+  document.getElementById('startScanBtn').disabled = true;
+
+  const res = await fetch('/api/start-scan', {method:'POST'});
+  const data = await res.json();
+  if (data.error) { setStatus('⚠ ' + data.error); setBadge('Error','red'); resetBtn(); return; }
+  taskId = data.task_id;
+  pollInt = setInterval(pollScan, 2000);
+});
+
+async function pollScan() {
+  const res  = await fetch('/api/scan-status/' + taskId);
+  const task = await res.json();
+  if (task.status === 'done') {
+    clearInterval(pollInt);
+    stopTimer();
+    handleScanResult(task.result);
+  } else if (task.status === 'error') {
+    clearInterval(pollInt);
+    stopTimer();
+    setStatus('⚠ Error: ' + task.result);
+    setBadge('Error','red');
+    resetBtn();
+  }
+}
+
+function handleScanResult(result) {
+  setBadge('Done','green');
+  setStatus('✅ Scan complete');
+  resetBtn();
+
+  if (result.recognized.length) {
+    const ul = document.getElementById('recognisedList');
+    ul.innerHTML = result.recognized.map(s=>`
+      <li class="student-item">
+        <span class="student-avatar">${s.name[0]}</span>
+        <span><b>${s.name}</b> <code>[${s.id}]</code></span>
+        <span class="mood-badge">${s.mood}</span>
+      </li>`).join('');
+    document.getElementById('recognisedBox').classList.remove('hidden');
+  }
+
+  if (result.has_unknown && result.unknown_frame_b64) {
+    unknownB64  = result.unknown_frame_b64;
+    unknownMood = result.unknown_mood || "neutral";
+    document.getElementById('unknownImg').src = 'data:image/jpeg;base64,' + unknownB64;
+    document.getElementById('unknownBox').classList.remove('hidden');
+  }
+
+  if (!result.recognized.length && !result.has_unknown)
+    setStatus('No face detected. Try again.');
+
+  loadTodayAtt();
+  loadHistory();
+}
+
+// ── Save recognised attendance ───────────────────────────────
+document.getElementById('saveAttBtn').addEventListener('click', async () => {
+  const items = [...document.querySelectorAll('#recognisedList .student-item')];
+  const recognized = items.map(li => ({
+    id:   li.querySelector('code').textContent.replace(/[\[\]]/g,''),
+    name: li.querySelector('b').textContent,
+    mood: li.querySelector('.mood-badge').textContent,
+  }));
+  await fetch('/api/save-attendance', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({recognized})});
+  showToast('Attendance saved ✓');
+  loadTodayAtt(); loadHistory();
+});
+
+// ── Register unknown ────────────────────────────────────────
+document.getElementById('registerBtn').addEventListener('click', async () => {
+  const sid  = document.getElementById('newSid').value.trim();
+  const name = document.getElementById('newName').value.trim();
+  if (!sid || !name) { showToast('Enter both ID and name', 'red'); return; }
+  const body = JSON.stringify({student_id:sid, name, frame_b64:unknownB64, mood:unknownMood});
+  const res  = await fetch('/api/register-student', {method:'POST', headers:{'Content-Type':'application/json'}, body});
+  const d    = await res.json();
+  if (d.success) {
+    showToast(`[${sid}] ${name} registered & saved ✓`);
+    document.getElementById('unknownBox').classList.add('hidden');
+    loadTodayAtt(); loadHistory();
+  } else { showToast('Error: ' + d.error, 'red'); }
+});
+
+// ── Helpers ─────────────────────────────────────────────────
+function setStatus(msg, scanning=false) {
+  document.getElementById('scanStatus').textContent = msg;
+  document.getElementById('scanRing').classList.toggle('scanning', scanning);
+}
+function setBadge(txt, color='blue') {
+  const b = document.getElementById('scanBadge');
+  b.textContent = txt;
+  b.className = 'badge badge-'+color;
+}
+function resetBtn() { document.getElementById('startScanBtn').disabled = false; }
+
+// Timer
+let timerAnimId;
+function startTimer(sec) {
+  const fill  = document.getElementById('timerFill');
+  const label = document.getElementById('timerLabel');
+  document.getElementById('scanTimer').classList.remove('hidden');
+  const start = Date.now();
+  function tick() {
+    const elapsed = (Date.now()-start)/1000;
+    const pct = Math.min(elapsed/sec*100,100);
+    fill.style.width = pct+'%';
+    label.textContent = Math.max(0,Math.round(sec-elapsed))+'s';
+    if (elapsed < sec) timerAnimId = requestAnimationFrame(tick);
+  }
+  timerAnimId = requestAnimationFrame(tick);
+}
+function stopTimer() {
+  cancelAnimationFrame(timerAnimId);
+  document.getElementById('timerFill').style.width='100%';
+  setTimeout(()=>document.getElementById('scanTimer').classList.add('hidden'), 800);
+}
+</script>
+{% endblock %}

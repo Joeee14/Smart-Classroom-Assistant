@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Smart Classroom{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="container">
+    <h1 class="page-title">📊 <span class="gradient-text">Dashboard</span></h1>
+    <p class="page-sub">Full analytics — attendance trends, subject breakdowns, and per-student records.</p>
+  </div>
+</div>
+<div class="container page-body">
+
+  <!-- Stat cards -->
+  <div class="stats-row">
+    <div class="stat-card glass"><div class="stat-icon blue">👥</div><div class="stat-value" id="dStatStudents">—</div><div class="stat-label">Registered Students</div></div>
+    <div class="stat-card glass"><div class="stat-icon blue">✅</div><div class="stat-value" id="dStatToday">—</div><div class="stat-label">Present Today</div></div>
+    <div class="stat-card glass"><div class="stat-icon red">❓</div><div class="stat-value"  id="dStatQ">—</div><div class="stat-label">Total Questions</div></div>
+  </div>
+
+  <div class="two-col mt">
+    <!-- Subject breakdown -->
+    <div class="panel glass fade-in-up">
+      <div class="panel-header"><h3>Questions by Subject</h3></div>
+      <div id="subjectChart" class="bar-chart"></div>
+    </div>
+    <!-- Recent questions -->
+    <div class="panel glass fade-in-up" style="animation-delay:.1s">
+      <div class="panel-header"><h3>Recent Questions</h3></div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Student</th><th>Subject</th><th>Question</th></tr></thead>
+          <tbody id="recentQBody"><tr><td colspan="3" class="empty">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Full attendance -->
+  <div class="panel glass mt fade-in-up">
+    <div class="panel-header">
+      <h3>All Attendance Records</h3>
+      <input class="input-sm" id="dashSearch" placeholder="🔍 Search…" oninput="dashFilter()"/>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Date</th><th>ID</th><th>Name</th><th>Mood</th><th>Status</th></tr></thead>
+        <tbody id="dashAttBody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let dashAllAtt = [];
+window.addEventListener('DOMContentLoaded', loadDash);
+
+function loadDash() {
+  fetch('/api/stats').then(r=>r.json()).then(d=>{
+    document.getElementById('dStatStudents').textContent = d.total_students;
+    document.getElementById('dStatToday').textContent    = d.today_attendance;
+    document.getElementById('dStatQ').textContent        = d.total_questions;
+  });
+  fetch('/api/questions-history').then(r=>r.json()).then(rows=>{
+    // Recent 5
+    const tb = document.getElementById('recentQBody');
+    tb.innerHTML = rows.slice(0,10).map(r=>`<tr>
+      <td>${r.student_name||'?'}</td>
+      <td><span class="subject-badge subject-${slugify(r.subject)}">${r.subject}</span></td>
+      <td class="q-cell">${r.question||''}</td></tr>`).join('') ||
+      '<tr><td colspan="3" class="empty">No data</td></tr>';
+    // Subject chart
+    const counts = {};
+    rows.forEach(r=>{ const s=r.subject||'Unknown'; counts[s]=(counts[s]||0)+1; });
+    const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+    const max = sorted[0]?.[1] || 1;
+    document.getElementById('subjectChart').innerHTML = sorted.map(([s,n])=>`
+      <div class="bar-row">
+        <span class="bar-label">${s}</span>
+        <div class="bar-track"><div class="bar-fill subject-bar-${slugify(s)}" style="width:${n/max*100}%"></div></div>
+        <span class="bar-num">${n}</span>
+      </div>`).join('') || '<p class="empty">No data</p>';
+  });
+  fetch('/api/attendance-history').then(r=>r.json()).then(rows=>{
+    dashAllAtt = rows;
+    renderDashAtt(rows);
+  });
+}
+function renderDashAtt(rows) {
+  const tb = document.getElementById('dashAttBody');
+  tb.innerHTML = rows.length
+    ? rows.map(r=>`<tr>
+        <td>${r.date||''}</td>
+        <td><code>${r.student_id||''}</code></td>
+        <td>${r.name||''}</td>
+        <td><span class="mood-badge">${r.mood||''}</span></td>
+        <td><span class="status-badge green">✓ Present</span></td>
+      </tr>`).join('')
+    : '<tr><td colspan="5" class="empty">No records</td></tr>';
+}
+function dashFilter() {
+  const q = document.getElementById('dashSearch').value.toLowerCase();
+  renderDashAtt(dashAllAtt.filter(r=>
+    (r.name||'').toLowerCase().includes(q)||(r.student_id||'').toLowerCase().includes(q)
+  ));
+}
+function slugify(s){return(s||'').toLowerCase().replace(/\s+/g,'-');}
+</script>
+{% endblock %}

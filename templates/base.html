@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>{% block title %}Smart Classroom{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="{{ url_for('static',filename='css/style.css') }}"/>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="navbar" id="navbar">
+  <div class="nav-inner">
+    <a href="/" class="nav-logo">
+      <span class="logo-icon">🎓</span>
+      <span>Smart<b>Classroom</b></span>
+    </a>
+    <div class="nav-links">
+      <a href="/" class="nav-link {% if request.endpoint=='index' %}active{% endif %}">Home</a>
+      <a href="/attendance" class="nav-link {% if request.endpoint=='attendance' %}active{% endif %}">Attendance</a>
+      <a href="/question"   class="nav-link {% if request.endpoint=='question'   %}active{% endif %}">Q&amp;A</a>
+      <a href="/dashboard"  class="nav-link {% if request.endpoint=='dashboard'  %}active{% endif %}">Dashboard</a>
+    </div>
+    <button class="theme-toggle" id="themeToggle" title="Toggle theme">🌙</button>
+    <button class="nav-burger" id="navBurger">☰</button>
+  </div>
+  <div class="nav-mobile" id="navMobile">
+    <a href="/" class="nav-link">Home</a>
+    <a href="/attendance" class="nav-link">Attendance</a>
+    <a href="/question"   class="nav-link">Q&amp;A</a>
+    <a href="/dashboard"  class="nav-link">Dashboard</a>
+  </div>
+</nav>
+
+{% block content %}{% endblock %}
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-inner">
+    <span class="logo-icon">🎓</span>
+    <p>Smart Classroom Assistant &copy; 2025 · Alamein International University · CSE383</p>
+  </div>
+</footer>
+
+<script src="{{ url_for('static',filename='js/app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

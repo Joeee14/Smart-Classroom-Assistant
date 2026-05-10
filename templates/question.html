@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+{% block title %}Q&A — Smart Classroom{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <div class="container">
+    <h1 class="page-title">🎤 <span class="gradient-text red-gradient">Q&amp;A</span></h1>
+    <p class="page-sub">Speak your question. The AI classifies the subject and logs it against your student profile.</p>
+  </div>
+</div>
+
+<div class="container page-body">
+  <div class="two-col">
+
+    <!-- LEFT: Recorder Panel -->
+    <div class="panel glass fade-in-up">
+      <div class="panel-header">
+        <h3>Voice Recorder</h3>
+        <span class="badge" id="recBadge">Idle</span>
+      </div>
+
+      <div class="scan-visual">
+        <div class="mic-ring" id="micRing">
+          <span class="scan-icon">🎤</span>
+        </div>
+        <p id="recStatus" class="scan-status">Press the button and speak your question</p>
+      </div>
+
+      <div class="wave-bars hidden" id="waveBars">
+        <span></span><span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+
+      <button class="btn btn-red btn-full" id="startRecBtn">
+        🎤 Start Recording
+      </button>
+
+      <!-- Result -->
+      <div class="result-box hidden" id="resultBox">
+        <div class="result-row">
+          <div class="result-label">Transcribed Question</div>
+          <div class="result-value" id="transcribedText">—</div>
+        </div>
+        <div class="result-row">
+          <div class="result-label">Detected Subject</div>
+          <div class="subject-badge" id="subjectBadge">—</div>
+        </div>
+      </div>
+
+      <!-- Save form -->
+      <div class="save-form hidden" id="saveForm">
+        <h4 style="margin-bottom:.75rem">Save Question</h4>
+        <select class="input" id="studentSelect">
+          <option value="">— Select attending student —</option>
+        </select>
+        <button class="btn btn-blue btn-full mt" id="saveQBtn">💾 Save Question</button>
+      </div>
+    </div>
+
+    <!-- RIGHT: Questions log -->
+    <div class="panel glass fade-in-up" style="animation-delay:.1s">
+      <div class="panel-header">
+        <h3>Today's Questions</h3>
+        <button class="btn-sm btn-ghost" onclick="loadQHistory()">↻ Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Student</th><th>Subject</th><th>Question</th><th>Time</th></tr></thead>
+          <tbody id="todayQBody"><tr><td colspan="4" class="empty">No questions yet</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Full questions history -->
+  <div class="panel glass fade-in-up mt" style="animation-delay:.2s">
+    <div class="panel-header">
+      <h3>All Questions History</h3>
+      <input class="input-sm" id="qSearch" placeholder="🔍 Search…" oninput="filterQ()"/>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Date/Time</th><th>ID</th><th>Student</th><th>Subject</th><th>Question</th></tr></thead>
+        <tbody id="allQBody"><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let recTaskId = null, recPoll = null, lastResult = null;
+const todayStr = new Date().toISOString().slice(0,10);
+
+window.addEventListener('DOMContentLoaded', () => {
+  loadStudentOptions();
+  loadQHistory();
+});
+
+// ── Load student dropdown from today's attendance ────────────
+function loadStudentOptions() {
+  fetch('/api/attendance-history').then(r=>r.json()).then(rows=>{
+    const today = rows.filter(r=>r.date===todayStr);
+    const sel = document.getElementById('studentSelect');
+    today.forEach(s=>{
+      const opt = document.createElement('option');
+      opt.value = s.student_id;
+      opt.textContent = `[${s.student_id}] ${s.name}`;
+      sel.appendChild(opt);
+    });
+  });
+}
+
+// ── Start recording ─────────────────────────────────────────
+document.getElementById('startRecBtn').addEventListener('click', async () => {
+  document.getElementById('startRecBtn').disabled = true;
+  document.getElementById('resultBox').classList.add('hidden');
+  document.getElementById('saveForm').classList.add('hidden');
+  document.getElementById('waveBars').classList.remove('hidden');
+  document.getElementById('micRing').classList.add('recording');
+  setRecStatus('🎤 Listening…', 'blue');
+
+  const res  = await fetch('/api/start-recording', {method:'POST'});
+  const data = await res.json();
+  recTaskId  = data.task_id;
+  recPoll    = setInterval(pollRec, 1500);
+});
+
+async function pollRec() {
+  const res  = await fetch('/api/recording-status/' + recTaskId);
+  const task = await res.json();
+  if (task.status === 'done') {
+    clearInterval(recPoll);
+    document.getElementById('waveBars').classList.add('hidden');
+    document.getElementById('micRing').classList.remove('recording');
+    document.getElementById('startRecBtn').disabled = false;
+    handleRecResult(task.result);
+  } else if (task.status === 'error') {
+    clearInterval(recPoll);
+    document.getElementById('waveBars').classList.add('hidden');
+    document.getElementById('micRing').classList.remove('recording');
+    document.getElementById('startRecBtn').disabled = false;
+    setRecStatus('⚠ Error: ' + task.result, 'red');
+  }
+}
+
+function handleRecResult(result) {
+  if (!result.question) {
+    setRecStatus('⚠ ' + (result.error || 'No speech detected'), 'red');
+    return;
+  }
+  lastResult = result;
+  document.getElementById('transcribedText').textContent = result.question;
+  document.getElementById('subjectBadge').textContent    = result.subject;
+  document.getElementById('subjectBadge').className      = 'subject-badge subject-' + slugify(result.subject);
+  document.getElementById('resultBox').classList.remove('hidden');
+  document.getElementById('saveForm').classList.remove('hidden');
+  setRecStatus('✅ Done — ' + result.subject, 'green');
+}
+
+// ── Save question ────────────────────────────────────────────
+document.getElementById('saveQBtn').addEventListener('click', async () => {
+  const sel  = document.getElementById('studentSelect');
+  const sid  = sel.value;
+  const name = sel.options[sel.selectedIndex]?.text || 'Unknown';
+  if (!sid)  { showToast('Please select a student', 'red'); return; }
+  const body = JSON.stringify({
+    student_id:   sid,
+    student_name: name.replace(/^\[.*?\]\s*/,''),
+    question:     lastResult.question,
+    subject:      lastResult.subject,
+  });
+  await fetch('/api/save-question', {method:'POST', headers:{'Content-Type':'application/json'}, body});
+  showToast('Question saved ✓');
+  document.getElementById('resultBox').classList.add('hidden');
+  document.getElementById('saveForm').classList.add('hidden');
+  setRecStatus('Ready to record', '');
+  loadQHistory();
+});
+
+// ── Q history ───────────────────────────────────────────────
+let allQ = [];
+function loadQHistory() {
+  fetch('/api/questions-history').then(r=>r.json()).then(rows=>{
+    allQ = rows;
+    const today = rows.filter(r=>(r.timestamp||'').slice(0,10)===todayStr);
+    const tb = document.getElementById('todayQBody');
+    tb.innerHTML = today.length
+      ? today.map(r=>`<tr>
+          <td>${r.student_name||'?'}</td>
+          <td><span class="subject-badge subject-${slugify(r.subject)}">${r.subject}</span></td>
+          <td class="q-cell">${r.question||''}</td>
+          <td>${(r.timestamp||'').slice(11,19)}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="4" class="empty">No questions yet</td></tr>';
+    renderAllQ(allQ);
+  });
+}
+function renderAllQ(rows) {
+  const tb = document.getElementById('allQBody');
+  tb.innerHTML = rows.length
+    ? rows.map(r=>`<tr>
+        <td>${(r.timestamp||'').slice(0,19).replace('T',' ')}</td>
+        <td><code>${r.student_id||''}</code></td>
+        <td>${r.student_name||''}</td>
+        <td><span class="subject-badge subject-${slugify(r.subject)}">${r.subject}</span></td>
+        <td class="q-cell">${r.question||''}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="5" class="empty">No records</td></tr>';
+}
+function filterQ() {
+  const q = document.getElementById('qSearch').value.toLowerCase();
+  renderAllQ(allQ.filter(r=>
+    (r.question||'').toLowerCase().includes(q) ||
+    (r.student_name||'').toLowerCase().includes(q) ||
+    (r.subject||'').toLowerCase().includes(q)
+  ));
+}
+function setRecStatus(msg, color='') {
+  document.getElementById('recStatus').textContent = msg;
+  const b = document.getElementById('recBadge');
+  b.textContent = color === 'blue' ? 'Listening' : color === 'green' ? 'Done' : color === 'red' ? 'Error' : 'Idle';
+  b.className = 'badge' + (color ? ' badge-'+color : '');
+}
+function slugify(s) { return (s||'').toLowerCase().replace(/\s+/g,'-'); }
+</script>
+{% endblock %}
