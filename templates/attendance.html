@@ -91,7 +91,8 @@
 <script>
 /* ─── Attendance Page Logic ─────────────────────────────── */
 let taskId = null, pollInt = null, unknownB64 = null, unknownMood = "neutral";
-const today = new Date().toISOString().slice(0,10);
+const _d = new Date();
+const today = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
 
 // ── Load tables on page load ────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
